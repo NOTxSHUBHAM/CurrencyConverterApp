@@ -1,24 +1,200 @@
-# Compiled class file
-*.class
+import javax.swing.*;
+import javax.swing.border.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.net.*;
+import java.io.*;
+import org.json.JSONObject;
 
-# Log file
-*.log
+public class CurrencyConverterApp extends JFrame {
+    private JTextField amountField;
+    private JLabel resultLabel;
+    private JPanel resultPanel;
+    private JRadioButton usdBtn, gbpBtn, sgdBtn, audBtn;
+    private ButtonGroup currencyGroup;
+    private final String API_URL = "https://api.exchangerate-api.com/v4/latest/INR";
 
-# BlueJ files
-*.ctxt
+    public CurrencyConverterApp() {
+        // Initialize UI
+        setTitle("Currency Converter");
+        setSize(500, 550);
+        setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setResizable(false);
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+        // Main panel
+        JPanel mainPanel = new JPanel(new GridBagLayout());
+        mainPanel.setBorder(BorderFactory.createEmptyBorder(20, 25, 20, 25));
+        add(mainPanel);
 
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(10, 0, 10, 0);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+        // Title label
+        JLabel titleLabel = new JLabel("Currency Converter");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        titleLabel.setForeground(new Color(0, 102, 204));
+        titleLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        mainPanel.add(titleLabel, gbc);
+
+        // Amount input - Fixed border syntax
+        amountField = new JTextField();
+        amountField.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        
+        // Create borders separately
+        Border lineBorder = BorderFactory.createLineBorder(Color.LIGHT_GRAY);
+        Border emptyBorder = BorderFactory.createEmptyBorder(8, 10, 8, 10);
+        amountField.setBorder(BorderFactory.createCompoundBorder(lineBorder, emptyBorder));
+        
+        gbc.gridy++;
+        mainPanel.add(amountField, gbc);
+
+        // Currency selection
+        JPanel currencyPanel = new JPanel(new GridLayout(4, 1, 8, 8));
+        currencyPanel.setBorder(BorderFactory.createTitledBorder("Select Target Currency"));
+        
+        usdBtn = new JRadioButton("USD - US Dollar");
+        gbpBtn = new JRadioButton("GBP - British Pound");
+        sgdBtn = new JRadioButton("SGD - Singapore Dollar");
+        audBtn = new JRadioButton("AUD - Australian Dollar");
+
+        currencyGroup = new ButtonGroup();
+        currencyGroup.add(usdBtn);
+        currencyGroup.add(gbpBtn);
+        currencyGroup.add(sgdBtn);
+        currencyGroup.add(audBtn);
+
+        currencyPanel.add(usdBtn);
+        currencyPanel.add(gbpBtn);
+        currencyPanel.add(sgdBtn);
+        currencyPanel.add(audBtn);
+
+        gbc.gridy++;
+        mainPanel.add(currencyPanel, gbc);
+
+        // Buttons
+        JPanel buttonPanel = new JPanel(new GridLayout(1, 2, 15, 0));
+        JButton convertBtn = new JButton("CONVERT");
+        convertBtn.setBackground(new Color(0, 153, 76));
+        convertBtn.setForeground(Color.WHITE);
+        
+        JButton clearBtn = new JButton("CLEAR");
+        clearBtn.setBackground(new Color(204, 0, 0));
+        clearBtn.setForeground(Color.WHITE);
+
+        buttonPanel.add(convertBtn);
+        buttonPanel.add(clearBtn);
+
+        gbc.gridy++;
+        mainPanel.add(buttonPanel, gbc);
+
+        // Result panel - Fixed border syntax
+        resultPanel = new JPanel(new BorderLayout());
+        
+        // Create borders separately
+        Border resultLineBorder = BorderFactory.createLineBorder(new Color(50, 180, 120));
+        Border resultEmptyBorder = BorderFactory.createEmptyBorder(15, 15, 15, 15);
+        resultPanel.setBorder(BorderFactory.createCompoundBorder(resultLineBorder, resultEmptyBorder));
+        
+        resultLabel = new JLabel("", SwingConstants.CENTER);
+        resultLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        resultPanel.add(resultLabel, BorderLayout.CENTER);
+        resultPanel.setVisible(false);
+
+        gbc.gridy++;
+        mainPanel.add(resultPanel, gbc);
+
+        // Event handlers
+        convertBtn.addActionListener(e -> convertCurrency());
+        clearBtn.addActionListener(e -> {
+            amountField.setText("");
+            currencyGroup.clearSelection();
+            resultPanel.setVisible(false);
+        });
+
+        setVisible(true);
+    }
+
+    private void convertCurrency() {
+        String amountText = amountField.getText().trim();
+        if (amountText.isEmpty() || !amountText.matches("\\d+(\\.\\d+)?")) {
+            JOptionPane.showMessageDialog(this, "Please enter a valid amount");
+            return;
+        }
+
+        String selectedCurrency = null;
+        if (usdBtn.isSelected()) selectedCurrency = "USD";
+        else if (gbpBtn.isSelected()) selectedCurrency = "GBP";
+        else if (sgdBtn.isSelected()) selectedCurrency = "SGD";
+        else if (audBtn.isSelected()) selectedCurrency = "AUD";
+
+        if (selectedCurrency == null) {
+            JOptionPane.showMessageDialog(this, "Please select a target currency");
+            return;
+        }
+
+        final String finalSelectedCurrency = selectedCurrency;
+        resultLabel.setText("<html><center>Fetching rates...</center></html>");
+        resultPanel.setVisible(true);
+
+        new SwingWorker<Double, Void>() {
+            @Override
+            protected Double doInBackground() throws Exception {
+                try {
+                    URL url = new URL(API_URL);
+                    HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                    conn.setRequestMethod("GET");
+                    conn.setConnectTimeout(5000);
+
+                    if (conn.getResponseCode() != 200) {
+                        throw new IOException("Server returned HTTP " + conn.getResponseCode());
+                    }
+
+                    BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(conn.getInputStream()));
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
+                    }
+                    reader.close();
+
+                    JSONObject json = new JSONObject(response.toString());
+                    return json.getJSONObject("rates").getDouble(finalSelectedCurrency);
+                } catch (Exception e) {
+                    throw e;
+                }
+            }
+
+            @Override
+            protected void done() {
+                try {
+                    double rate = get();
+                    double amount = Double.parseDouble(amountText);
+                    double converted = amount * rate;
+
+                    String output = String.format("<html><div style='text-align:center;'>"
+                            + "<span style='font-size:14px;'>%.2f INR = </span><br>"
+                            + "<span style='font-size:22px; font-weight:bold;'>%.2f %s</span><br>"
+                            + "<span style='font-size:12px;'>Rate: 1 INR = %.4f %s</span>"
+                            + "</div></html>", 
+                            amount, converted, finalSelectedCurrency, rate, finalSelectedCurrency);
+
+                    resultLabel.setText(output);
+                } catch (Exception e) {
+                    resultLabel.setText("<html><center><b>Error fetching rates</b><br>"
+                            + e.getMessage() + "</center></html>");
+                }
+                resultPanel.setVisible(true);
+            }
+        }.execute();
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(() -> new CurrencyConverterApp());
+    }
+}
